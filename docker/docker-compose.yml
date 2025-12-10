@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  mariadb:
+    image: mariadb:10.11
+    container_name: noc_mariadb
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: noc_db
+      MYSQL_USER: noc_user
+      MYSQL_PASSWORD: noc_password
+    ports:
+      - "3366:3306"
+    volumes:
+      - mariadb_data:/var/lib/mysql
+      # Mount schema.sql to automatically create tables on first run
+      - ../backend/database/schema.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - noc_network
+
+  # Redis (Optional - prepared for future use)
+  # redis:
+  #   image: redis:alpine
+  #   container_name: noc_redis
+  #   restart: always
+  #   ports:
+  #     - "6379:6379"
+  #   networks:
+  #     - noc_network
+
+networks:
+  noc_network:
+    driver: bridge
+
+volumes:
+  mariadb_data:
