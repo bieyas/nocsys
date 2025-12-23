@@ -5,7 +5,7 @@ let listeners = [];
 
 export function connectWebSocket() {
     if (ws && ws.readyState === WebSocket.OPEN) return;
-    const url = (window.location.protocol === 'https:' ? 'wss://' : 'ws://') + window.location.hostname + ':6001';
+    const url = import.meta.env.VITE_WS_URL;
     ws = new window.WebSocket(url);
     ws.onmessage = (event) => {
         try {
@@ -13,7 +13,9 @@ export function connectWebSocket() {
             if (msg.type === 'status-update') {
                 listeners.forEach(fn => fn(msg.data));
             }
-        } catch { }
+        } catch {
+            // Ignore malformed messages
+        }
     };
     ws.onclose = () => {
         setTimeout(connectWebSocket, 5000); // Auto-reconnect

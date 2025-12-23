@@ -22,7 +22,6 @@ const infrastructureRoutes = require('./routes/infrastructureRoutes');
 const packageRoutes = require('./routes/packageRoutes');
 const authMiddleware = require('./middlewares/authMiddleware');
 
-
 app.use('/api/auth', authRoutes);
 app.use('/api/devices', authMiddleware, deviceRoutes);
 app.use('/api/infrastructure', authMiddleware, infrastructureRoutes);

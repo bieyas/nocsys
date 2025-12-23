@@ -1,3 +1,4 @@
+require('dotenv').config({ path: __dirname + '/../.env' });
 const db = require('../src/config/database');
 const fs = require('fs');
 const path = require('path');

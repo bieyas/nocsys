@@ -1,0 +1,5 @@
+// generate-jwt-secret.js
+const crypto = require('crypto');
+
+const secret = crypto.randomBytes(64).toString('base64');
+console.log(`JWT_SECRET=${secret}`);

@@ -10,8 +10,8 @@ import Settings from './pages/Settings';
 import Login from './pages/Login';
 import OdpPop from './pages/OdpPop';
 import MapComponent from './pages/Map';
-import Packages from './pages/Packages';
-import PackageTabs from './pages/PackageTabs';
+import Packages from './pages/packages/Packages';
+import PackageTabs from './pages/packages/PackageTabs';
 import SyncMikrotik from './pages/SyncMikrotik';
 
 function App() {

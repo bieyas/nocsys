@@ -99,6 +99,15 @@ const Dashboard = () => {
                     onClick={() => navigate('/clients?status=offline')}
                 />
                 <StatCard
+                    title="Isolir"
+                    value={loading ? "..." : (typeof stats.isolir_clients !== 'undefined' ? stats.isolir_clients : 0)}
+                    icon={Server}
+                    color="yellow"
+                    trend="down"
+                    trendValue="Disconnected"
+                    onClick={() => navigate('/clients?status=isolir')}
+                />
+                {/* <StatCard
                     title="Bandwidth Usage"
                     value={loading ? "..." : (
                         <div className="text-lg">
@@ -107,7 +116,7 @@ const Dashboard = () => {
                     )}
                     icon={Activity}
                     color="purple"
-                />
+                /> */}
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

@@ -1,13 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
-import PackageSelect from '../components/PackageSelect';
-import { updateClientPackage } from '../services/packageApi';
-import Toast from '../components/Toast';
+import React, { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Search, RefreshCw, Plus, MoreVertical, Trash2, Edit, CheckCircle, XCircle, MessageCircle, MapPin, Power, PowerOff, Info, Globe } from 'lucide-react';
-import api from '../services/api';
-import { connectWebSocket, onStatusUpdate } from '../services/ws';
+import { Search, RefreshCw, Plus, Trash2, Edit, MessageCircle, MapPin, Power, PowerOff, Info, Globe } from 'lucide-react';
+import Toast from '../components/Toast';
 import ClientModal from '../components/ClientModal';
 import ClientDetailModal from '../components/ClientDetailModal';
+import { useClients } from '../hooks/useClients';
 
 // Helper to safely check if client is disabled (handling boolean, number, string, or Buffer)
 const isClientDisabled = (client) => {
@@ -20,143 +17,34 @@ const isClientDisabled = (client) => {
 };
 
 const Clients = () => {
-    const [toast, setToast] = useState({ message: '', type: 'info' });
     const [searchParams] = useSearchParams();
-    const statusFilter = searchParams.get('status'); // 'online' or 'offline' or null
-
-    const [clients, setClients] = useState([]);
-    const [packageUpdating, setPackageUpdating] = useState({}); // { [clientId]: true }
-    const [devices, setDevices] = useState([]);
-    const [onlineUsernames, setOnlineUsernames] = useState(new Set());
-    const [selectedDeviceId, setSelectedDeviceId] = useState('');
-    const [loading, setLoading] = useState(true);
-    const [syncing, setSyncing] = useState(false);
+    const statusFilter = searchParams.get('status');
     const [searchTerm, setSearchTerm] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
     const [editingClient, setEditingClient] = useState(null);
     const [detailClient, setDetailClient] = useState(null);
-    const [selectedClients, setSelectedClients] = useState([]);
 
-    const fetchDevices = async () => {
-        try {
-            const response = await api.get('/devices');
-            if (response.data.success) {
-                setDevices(response.data.data);
-                if (response.data.data.length > 0) {
-                    setSelectedDeviceId(response.data.data[0].id);
-                }
-            }
-        } catch (error) {
-            console.error('Error fetching devices:', error);
-        }
-    };
+    const {
+        devices,
+        selectedDeviceId,
+        setSelectedDeviceId,
+        loading,
+        syncing,
+        toast,
+        setToast,
+        selectedClients,
+        setSelectedClients,
+        filteredClients,
+        handleSync,
+        handleBulkDelete,
+        handleBulkStatus,
+        handleSave
+    } = useClients(statusFilter, searchTerm);
 
-    const fetchClients = async () => {
-        try {
-            const [clientsRes, onlineRes] = await Promise.all([
-                api.get('/pppoe-clients'),
-                api.get('/pppoe-clients/online')
-            ]);
 
-            if (clientsRes.data.success) {
-                setClients(clientsRes.data.data);
-            }
-            if (onlineRes.data.success) {
-                setOnlineUsernames(new Set(onlineRes.data.data));
-            }
-        } catch (error) {
-            console.error('Error fetching clients:', error);
-        } finally {
-            setLoading(false);
-        }
-    };
 
-    const handleSync = async () => {
-        if (!selectedDeviceId) {
-            alert('Please select a device to sync');
-            return;
-        }
-        setSyncing(true);
-        try {
-            await api.post('/pppoe-clients/sync', { device_id: selectedDeviceId });
-            // Setelah sync data, lakukan sync status
-            const statusRes = await api.post('/pppoe-clients/sync-status', { device_id: selectedDeviceId });
-            await fetchClients();
-            setToast({
-                message: statusRes.data?.message || 'Sync status completed',
-                type: statusRes.data?.success ? 'success' : 'warning'
-            });
-        } catch (error) {
-            console.error('Error syncing:', error);
-            setToast({
-                message: error.response?.data?.message || 'Sync failed',
-                type: 'error'
-            });
-        } finally {
-            setSyncing(false);
-        }
-    };
-
-    const handleDelete = async (id, username) => {
-        if (!window.confirm(`Are you sure you want to delete client ${username}?`)) {
-            return;
-        }
-
-        const syncMikrotik = window.confirm('Also delete from MikroTik Router?');
-
-        try {
-            await api.delete(`/pppoe-clients/${id}?sync_mikrotik=${syncMikrotik}`);
-            setClients(clients.filter(c => c.id !== id));
-            setSelectedClients(selectedClients.filter(clientId => clientId !== id));
-        } catch (error) {
-            console.error('Error deleting client:', error);
-            alert('Failed to delete client');
-        }
-    };
-
-    const handleBulkDelete = async () => {
-        const shouldSync = window.confirm('Do you want to delete these clients from MikroTik as well?\n\nClick OK to delete from BOTH Database and MikroTik.\nClick Cancel to delete from Database ONLY.');
-
-        // Note: window.confirm only returns true/false. 
-        // If user cancels, they might mean "Cancel operation" or "No, don't sync".
-        // This standard confirm is ambiguous.
-        // Let's use a custom approach or just assume "Cancel" means abort.
-        // But the user asked for a choice.
-
-        // Better approach: Use a custom modal or a simple prompt?
-        // Let's try a different UX: Add a checkbox near the bulk delete button?
-        // Or just use two confirms?
-        // "Are you sure you want to delete?" -> OK
-        // "Also delete from MikroTik?" -> OK/Cancel
-
-        if (!window.confirm(`Are you sure you want to delete ${selectedClients.length} clients?`)) {
-            return;
-        }
-
-        const syncMikrotik = window.confirm('Also delete from MikroTik Router?');
-
-        try {
-            await api.post('/pppoe-clients/bulk-delete', { ids: selectedClients, sync_mikrotik: syncMikrotik });
-            setClients(clients.filter(c => !selectedClients.includes(c.id)));
-            setSelectedClients([]);
-        } catch (error) {
-            console.error('Error deleting clients:', error);
-            alert('Failed to delete clients');
-        }
-    };
-
-    const handleBulkStatus = async (action) => {
-        try {
-            await api.post('/pppoe-clients/toggle-status', { ids: selectedClients, action });
-            await fetchClients(); // Refresh to get updated status
-            setSelectedClients([]);
-        } catch (error) {
-            console.error(`Error ${action}ing clients:`, error);
-            alert(`Failed to ${action} clients`);
-        }
-    };
-
+    // UI handlers
     const handleSelectAll = (e) => {
         if (e.target.checked) {
             setSelectedClients(filteredClients.map(c => c.id));
@@ -183,27 +71,6 @@ const Clients = () => {
         setIsModalOpen(true);
     };
 
-    const handleSave = async (clientData) => {
-        try {
-            let response;
-            if (editingClient) {
-                response = await api.put(`/pppoe-clients/${editingClient.id}`, clientData);
-            } else {
-                response = await api.post('/pppoe-clients', clientData);
-            }
-            await fetchClients();
-            setToast({
-                message: response.data?.message || 'Client saved successfully',
-                type: response.data?.success ? 'success' : 'warning'
-            });
-        } catch (error) {
-            setToast({
-                message: error.response?.data?.message || 'Failed to save client',
-                type: 'error'
-            });
-            throw error; // Let the modal handle the error display
-        }
-    };
 
     const handleDetail = (client) => {
         setDetailClient(client);
@@ -223,7 +90,6 @@ const Clients = () => {
             alert('No phone number available for this client.');
             return;
         }
-        // Format phone number: replace 08 with 628, remove non-digits
         let formatted = phoneNumber.replace(/\D/g, '');
         if (formatted.startsWith('0')) {
             formatted = '62' + formatted.substring(1);
@@ -239,43 +105,9 @@ const Clients = () => {
         window.open(`https://www.google.com/maps?q=${lat},${long}`, '_blank');
     };
 
-    // Hybrid polling + WebSocket
-    const pollingRef = useRef();
-    useEffect(() => {
-        fetchDevices();
-        fetchClients();
-        connectWebSocket();
-        // Listen for status push
-        onStatusUpdate((statusArr) => {
-            // statusArr: [{ id, username, status }]
-            setClients(prevClients => prevClients.map(c => {
-                const found = statusArr.find(s => s.id === c.id);
-                return found ? { ...c, status: found.status } : c;
-            }));
-            setOnlineUsernames(new Set(statusArr.filter(s => s.status === 'online').map(s => s.username)));
-        });
-        // Polling fallback every 30s
-        pollingRef.current = setInterval(fetchClients, 30000);
-        return () => {
-            clearInterval(pollingRef.current);
-        };
-    }, []);
 
-    const filteredClients = clients.filter(client => {
-        const matchesSearch = client.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (client.full_name && client.full_name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-            (client.customer_id && client.customer_id.toLowerCase().includes(searchTerm.toLowerCase()));
 
-        if (!matchesSearch) return false;
 
-        if (statusFilter === 'online') {
-            return onlineUsernames.has(client.username);
-        }
-        if (statusFilter === 'offline') {
-            return !onlineUsernames.has(client.username);
-        }
-        return true;
-    });
 
     return (
         <div>
@@ -407,6 +239,9 @@ const Clients = () => {
                                     if (client.status === 'online') {
                                         statusColor = 'bg-green-500';
                                         statusText = 'Online';
+                                    } else if (client.status === 'offline') {
+                                        statusColor = 'bg-red-500';
+                                        statusText = 'Offline';
                                     } else if (client.status === 'isolir') {
                                         statusColor = 'bg-yellow-400';
                                         statusText = 'Isolir';
@@ -445,7 +280,7 @@ const Clients = () => {
                                                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 border border-blue-200">
                                                     {client.service_name}
                                                 </span>
-                                                <div className="mt-2">
+                                                {/* <div className="mt-2">
                                                     <PackageSelect
                                                         value={client.package_id || ''}
                                                         onChange={async (e) => {
@@ -456,7 +291,7 @@ const Clients = () => {
                                                                 setToast({ message: 'Paket langganan berhasil diubah', type: 'success' });
                                                                 await fetchClients();
                                                             } catch (err) {
-                                                                setToast({ message: 'Gagal mengubah paket langganan', type: 'error' });
+                                                                setToast({ message: err.message || 'Gagal mengubah paket langganan', type: 'error' });
                                                             } finally {
                                                                 setPackageUpdating(prev => ({ ...prev, [client.id]: false }));
                                                             }
@@ -465,7 +300,7 @@ const Clients = () => {
                                                     {packageUpdating[client.id] && (
                                                         <span className="text-xs text-blue-500 ml-2">Updating...</span>
                                                     )}
-                                                </div>
+                                                </div> */}
                                             </td>
                                             <td className="p-4 text-gray-600 hidden md:table-cell text-sm">
                                                 {client.device_name || <span className="text-gray-400 italic">Unknown</span>}
@@ -535,7 +370,7 @@ const Clients = () => {
             <ClientModal
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
-                onSave={handleSave}
+                onSave={clientData => handleSave(editingClient, clientData)}
                 client={editingClient}
             />
 

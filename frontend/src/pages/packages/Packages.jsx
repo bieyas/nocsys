@@ -4,8 +4,8 @@ import {
     createPackage,
     updatePackage,
     deletePackage
-} from '../services/packageApi';
-import Toast from '../components/Toast';
+} from '../../services/packageApi';
+import Toast from '../../components/Toast';
 
 const Packages = () => {
     const [packages, setPackages] = useState([]);
